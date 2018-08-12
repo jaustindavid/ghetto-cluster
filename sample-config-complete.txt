@@ -1,0 +1,31 @@
+master config: mini:~/gc/config.txt
+
+ignore suffix: .DS_Store, .fseventsd, .Spotlight-V100, .DocumentRevisions-V100, .sync
+options: LAZY WRITE: 10, RSYNC TIMEOUT: 180, CYCLE: 300, LOGFILE: ~/gc/gc.log
+
+master: mini:/Volumes/Media_ZFS/Movies
+slave: mc-wifi:/mnt/disk1/Movies
+ignore suffix: mobile, index.html
+
+master: mini:/Volumes/Media_ZFS/Movies/mobile
+slave: imac:/Users/austin/backup/mobile
+ignore suffix: index.html, .sync
+
+master: mini:/Volumes/Media_ZFS/Movies
+slave: node0:/mnt/disk1/austin/Movies
+ignore suffix: index.html, .sync
+options: delete
+
+master: mini:/Volumes/Docs_ZFS/Family Stuff.sparsebundle
+slave: node1:/home/austin/b-hole/Family Stuff.sparsebundle
+
+master: mini:/Volumes/Docs_ZFS/TMLite.sparsebundle
+slave: node1:/home/austin/b-hole/TMLite.sparsebundle
+slave: imac:/Users/austin/backup/TMLite.sparsebundle
+slave: node0:/home/austin/b-hole/TMLite.sparsebundle
+
+master: mini:/Volumes/Docs_ZFS/Documents.sparsebundle
+slave: node1:/home/austin/b-hole/Documents.sparsebundle
+slave: imac:/Users/austin/backup/Documents.sparsebundle
+slave: node0:/home/austin/b-hole/Documents.sparsebundle
+
