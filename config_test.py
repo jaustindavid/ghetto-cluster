@@ -13,13 +13,14 @@ class TestCacheMethods(unittest.TestCase):
 
     def test_config(self):
         cfg = config.Config.instance()
-        cfg.init("config.txt")
+        cfg.init("sample-config-complete.txt")
         print(cfg.config)
-        self.assertEquals(cfg.getConfig("global", "ignore suffix"), \
-                            ".DS_STORE")
-        self.assertEquals(cfg.getConfig('mini:/Volumes/Media_ZFS/Movies', \
-                            "ignore suffix"), "index.html")
-        self.assertEquals(cfg.getConfig("global", "BLOCKSIZE"), '10240')
+        ignores = cfg.getConfig("global", "ignore suffix")
+        self.assertEquals(".DS_Store" in ignores, True)
+        ignores = cfg.getConfig('mini:/Volumes/Media_ZFS/Movies', \
+                                "ignore suffix")
+        self.assertEquals("index.html" in ignores, True)
+        self.assertEquals(cfg.getConfig("global", "LOGFILE"), "~/gc/gc.log")
 
 if __name__ == "__main__":
     suite = unittest.TestLoader().loadTestsFromTestCase(TestCacheMethods)
