@@ -429,9 +429,10 @@ def main(argv):
         logLevel = logging.INFO
     if as_daemon:
         global PIDFILE
-        # fh = logging.FileHandler("gc.log", "a")
+        LOGFILE = os.path.expanduser(cfg.getConfig(
+                        "global", "LOGFILE", "gc.log"))
         fh = logging.handlers.RotatingFileHandler( \
-                "gc.log", maxBytes=10*2**20, backupCount=5)
+                LOGFILE, maxBytes=10*2**20, backupCount=5)
         fh.setLevel(logLevel)
         logger.addHandler(fh)
         logging.basicConfig(format='%(asctime)s [%(name)s] %(message)s',
