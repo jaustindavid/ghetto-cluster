@@ -119,6 +119,8 @@ class Config:
     
     def process_global_options(self):
         options = self.getConfig("global", "options") 
+        if options is None:
+            return
         if type(options) is str:
             self.process_option("global", options)
         else:
