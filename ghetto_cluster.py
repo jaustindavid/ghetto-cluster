@@ -102,9 +102,10 @@ class GhettoClusterNode:
         for dirent in sorted(direntries):
             if self.ignoring(ignorals, dirent): 
                 continue
-            # probably DEAD
+            # not DEAD yet!
             if dirent.find(".ghetto_cluster") != -1:
-                self.logger.warn("This should not happen: DEAD CODE")
+                self.logger.warning("This should not happen: lost files!")
+                self.logger.warning(f"{path}/{dirent} should have been ignored")
                 continue
             fqde = f"{path}/{dirent}"
             self.logger.debug(f"scanning {fqde}")
