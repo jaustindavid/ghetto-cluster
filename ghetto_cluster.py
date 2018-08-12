@@ -104,6 +104,7 @@ class GhettoClusterNode:
                 continue
             # probably DEAD
             if dirent.find(".ghetto_cluster") != -1:
+                self.logger.warn("This should not happen: DEAD CODE")
                 continue
             fqde = f"{path}/{dirent}"
             self.logger.debug(f"scanning {fqde}")
@@ -153,78 +154,6 @@ class GhettoClusterMaster(GhettoClusterNode):
                                f"master.{context}.json"
         self.states = persistent_dict.PersistentDict(persistent_dict_name)
         self.logger = logging.getLogger(logger_str(__class__))
-
-
-    def ignoring(self, ignorals, dirent):
-        for suffix in ignorals:
-            if dirent.endswith(suffix):
-                return True
-        return False
-
-
-    def DEADscan(self):
-        self.logger.info(f"scanning {self.path}")
-        ignorals = build_ignorals(self.context)
-        cwd = os.getcwd()
-        os.chdir(self.path)
-        changed = self.scandir(".", ignorals)
-        os.chdir(cwd)
-        self.removeDeleteds()
-        return changed
-
-
-    # recursively scan a directory; populate self.states
-    # FQDE = fully qualified directory entry: a full path for
-    # the file (relative to the master/slave base dir)
-    def DEADscandir(self, path, ignorals, verbose = False):
-        changed = False
-        if path.startswith("./"):
-            path = path[2:]
-        timer = elapsed.ElapsedTimer()
-        self.logger.debug(f"scanning path {path}, ignoring {ignorals}")
-        try:
-            direntries = os.listdir(path)
-        except (FileNotFoundError, PermissionError):
-            return None
-        for dirent in sorted(direntries):
-            if self.ignoring(ignorals, dirent): 
-                continue
-            if dirent.find(".ghetto_cluster") != -1:
-                continue
-            fqde = f"{path}/{dirent}"
-            self.logger.debug(f"scanning {fqde}")
-            if os.path.isdir(fqde):
-                if self.scandir(fqde, ignorals):
-                    changed = True
-                continue
-            # if fqde not in self.fileStates:
-            if not self.states.contains_p(fqde):
-                # no FQDE: checksum & write it
-                self.logger.info(f"new: {fqde}")
-                actualState = file_state.FileState(fqde, True)
-                self.states.set(fqde, actualState.to_dict())
-                changed = True
-            else:
-                # FQDE: no checksum...
-                actualState = file_state.FileState(fqde, False)
-                if actualState.maybechanged(self.states.get(fqde)):
-                    # ... maybe changed.  checksum + write
-                    self.logger.info(f"changed: {fqde}")
-                    actualState = file_state.FileState(fqde, True)
-                    self.states.set(fqde, actualState.to_dict())
-                    changed = True
-                else:
-                    # ... probably same.  copy
-                    # no-op if we're not nuking states
-                    self.states.touch(fqde)
-        return changed
-
-
-    def DEADremoveDeleteds(self):
-        for fqde in self.states.clean_keys():
-            self.logger.info(f"deleted: {fqde}")
-            self.states.delete(fqde)
-        self.states.write()
 
 
 
@@ -287,39 +216,6 @@ class GhettoClusterSlave(GhettoClusterNode):
         # os.chdir(cwd)
 
         
-    def DEADsync_filelist(self):
-        print(f"Syncing .ghetto_cluster from {self.source}")
-        source = f"{self.source}/.ghetto_cluster"
-        dest = self.path
-        # self.copyFile(source, dest)
-        file_state.rsync(source, dest)
-        self.states.read(True)
-
-
-    def DEADcopyFile(self, source, dest):
-        RSYNC = "/Users/austind/src/ghetto-cluster/rsync.sh"
-        print(f"copying {source} to {dest}")
-        command = [ RSYNC, source, dest ]
-        subprocess.call(command)
-
-
-    # (recursively?) compare local state to desired state,
-    # one-at-a-time retrieve missing files
-    def DEADpullfiles(self, subdir, verbose = False):
-        timer = elapsed.ElapsedTimer()
-        print(f"Pulling files in {subdir}")
-        if verbose:
-            print(f"pulling in path {path}")
-        for fqde, remoteState in self.states.items():
-            print(f"looking for {fqde}")
-            localFile = file_state.FileState(fqde, False)
-            if localFile.maybechanged(remoteState):
-                print(f"maybe changed")
-                source = f"{config.path_for(self.source)}/{fqde}"
-                if verbose:
-                    print(f"copying {source} -> {fqde}")
-                self.mkdir(fqde)
-                self.copyFile(source, fqde)
 
 
 class GhettoCluster:

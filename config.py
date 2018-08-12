@@ -58,19 +58,6 @@ class Config:
         self.load()
 
 
-    def DEADread_local_config(self, verbose = False):
-        with open(self.filename, "r") as file:
-            for line in file:
-                if verbose:
-                    print(line.strip()) 
-                tokens = line.strip().split(": ", 1)
-                if tokens[0] == "hostname":
-                    self.hostname = tokens[1]
-                elif tokens[0] == "master config":
-                    self.master_config = tokens[1]
-        self.pull_master_config(True)
-
-
     # if testing, just copy the thing (rsync w/o hostnames)
     #   otherwise, rsync to the config filename
     def pull_master_config(self):
