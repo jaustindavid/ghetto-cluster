@@ -238,6 +238,7 @@ class GhettoCluster:
                     self.logger.info(f"{context}: {master}")
                     gcm = GhettoClusterMaster(context)
                     gcm.scan()
+                    self.get_status(context, False)
                 self.logger.info("masters are complete.")
             else:
                 self.logger.info("master of None")
@@ -256,6 +257,58 @@ class GhettoCluster:
             CYCLE = int(self.config.getConfig("global", "CYCLE", 60))
             self.logger.info(f"Done (sleeping for {CYCLE}s)")
             time.sleep(CYCLE)
+
+
+    def stats_forever(self):
+        while True:
+            self.config.load()
+            masters = self.config.get_masters_for_host(self.hostname)
+            if len(masters.items()) > 0:
+                for context, master in masters.items():
+                    print(f"Master: {context}: {config.path_for(master)}")
+                    self.get_status(context)
+                print("-=" * 20 + "-")
+            else:
+                print("Not master of anything")
+            time.sleep(30)
+
+
+    def get_status(self, context, to_console = True):
+        master = self.config.get_master_for_context(context)
+        target = self.sizeof(master, context, "master")
+        for slave in self.config.get_slaves_for_context(context):
+            nlines = self.sizeof(master, context, \
+                                 config.host_for(slave))
+            pct_complete = int(100*nlines/target)
+            if nlines == target:
+                msg = f"Complete: {nlines} files: {slave}"
+            elif nlines < target:
+                msg = f"{pct_complete:3d}% {nlines}/{target}: {slave}"
+            else:
+                msg = f"WARNING: too many files in slave {config.host_for(slave)}\n" + \
+                      f"{nlines}/{target}: {slave}"
+            if to_console:
+                print(msg)
+            else:
+                self.logger.info(msg)
+        if to_console:
+            print()
+
+
+    def sizeof(self, master, context, hostname):
+        filename = f"{config.path_for(master)}/.ghetto_cluster/" + \
+                    f"{hostname}.{context}.json"
+        return self.grep_c(filename, "filename")
+
+
+    # it's grep -c, basically
+    def grep_c(self, filename, string):
+        n = 0
+        with open(filename, "r") as file:
+            for line in file:
+                if string in line:
+                    n += 1
+        return n
 
 
 
@@ -285,7 +338,7 @@ def setup_logging():
 
 def main(argv):
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "a:c:h:dkntv")
+        opts, args = getopt.getopt(sys.argv[1:], "a:c:h:dknstv")
     except getopt.GetoptError as err:
         print(err)
         sys.exit(1)
@@ -294,7 +347,7 @@ def main(argv):
     configfile = "config.txt"
     as_daemon = False
     hostname = platform.node()
-    killing = False
+    status = False
     testing = False
     verbose = False
     logger = logging.getLogger(__name__)
@@ -312,6 +365,8 @@ def main(argv):
             hostname = arg
         elif opt == "-k":
             kill_and_exit()
+        elif opt == "-s":
+            status = True
         elif opt == "-t":
             cfg.setConfig("global", "testing", True)
         elif opt == "-v":
@@ -320,6 +375,8 @@ def main(argv):
         else:
             assert False, "Unhandled option"
     gc = GhettoCluster(configfile, hostname)
+    if status:
+        gc.stats_forever()
     if verbose:
         logLevel = logging.DEBUG
     else:
