@@ -40,6 +40,7 @@ for this host,
 import sys, getopt, time, os, signal, subprocess, platform, logging, daemonize
 import config, file_state, elapsed, persistent_dict
 from utils import logger_str
+from threading import Thread
 
 
 class GhettoClusterNode:
@@ -93,7 +94,6 @@ class GhettoClusterNode:
         changed = False
         if path.startswith("./"):
             path = path[2:]
-        timer = elapsed.ElapsedTimer()
         self.logger.debug(f"scanning path {path}, ignoring {ignorals}")
         try:
             direntries = os.listdir(path)
@@ -249,7 +249,19 @@ class GhettoCluster:
                     source = self.config.get_master_for_context(context)
                     dest = config.path_for(slave)
                     gcs = GhettoClusterSlave(context, slave, source)
-                    gcs.pull()
+                    # gcs.pull()
+                    # gcs.scan()
+                    puller = Thread(target=gcs.pull)
+                    self.logger.info("Starting pull thread")
+                    puller.start()
+                    timer = elapsed.ElapsedTimer()
+                    while puller.is_alive():
+                        if timer.once_every(15):
+                            scanner = Thread(target=gcs.scan)
+                            self.logger.info("Starting scan thread")
+                            scanner.start()
+                            scanner.join()
+                            self.logger.info("Scan thread complete")
                     gcs.scan()
                 self.logger.info("Slaves are complete")
             else:
