@@ -137,7 +137,7 @@ def rsync(source, dest, options = []):
             doctored_dest = re.sub(r' ', '\ ', dest)
         else:
             doctored_dest = dest
-        RSYNC_TIMEOUT = cfg.getConfig("global", "RSYNC TIMEOUT", 180)
+        RSYNC_TIMEOUT = str(cfg.getConfig("global", "RSYNC TIMEOUT", 180))
         command = [ RSYNC, "-a", "--inplace", "--partial", \
                     "--timeout", RSYNC_TIMEOUT, \
                     doctored_source, doctored_dest ]
