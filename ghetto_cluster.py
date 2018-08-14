@@ -39,7 +39,7 @@ for this host,
 
 import sys, getopt, time, os, signal, subprocess, platform, logging, daemonize
 import config, file_state, elapsed, persistent_dict
-from utils import logger_str
+from utils import logger_str, str_to_duration, duration_to_str
 from threading import Thread
 
 
@@ -76,7 +76,7 @@ class GhettoClusterNode:
 
 
     def scan(self, gen_checksums = False):
-        self.logger.info(f"scanning {self.path}")
+        self.logger.debug(f"scanning {self.path}")
         ignorals = self.build_ignorals()
         cwd = os.getcwd()
         os.chdir(self.path)
@@ -115,7 +115,7 @@ class GhettoClusterNode:
                 continue
             if not self.states.contains_p(fqde):
                 # no FQDE: (maybe) checksum & write it
-                self.logger.info(f"new: {fqde}")
+                self.logger.debug(f"new: {fqde}")
                 actualState = file_state.FileState(fqde, gen_checksums)
                 self.states.set(fqde, actualState.to_dict())
                 changed = True
@@ -124,7 +124,7 @@ class GhettoClusterNode:
                 actualState = file_state.FileState(fqde, False)
                 if actualState.maybechanged(self.states.get(fqde)):
                     # ... maybe changed.  (maybe) checksum + write
-                    self.logger.info(f"changed: {fqde}")
+                    self.logger.debug(f"changed: {fqde}")
                     actualState = file_state.FileState(fqde, gen_checksums)
                     self.states.set(fqde, actualState.to_dict())
                     changed = True
@@ -137,7 +137,7 @@ class GhettoClusterNode:
     def removeDeleteds(self):
         changed = False
         for fqde in self.states.clean_keys():
-            self.logger.info(f"deleted: {fqde}")
+            self.logger.debug(f"removed: {fqde}")
             self.states.delete(fqde)
             changed = True
         self.states.write()
@@ -151,9 +151,9 @@ class GhettoClusterMaster(GhettoClusterNode):
         super().__init__(context)
         self.master = self.config.get_master_for_context(context)
         self.path = config.path_for(self.master)
-        persistent_dict_name = f"{self.path}/.ghetto_cluster/" \
+        persistent_dict_file = f"{self.path}/.ghetto_cluster/" \
                                f"master.{context}.json"
-        self.states = persistent_dict.PersistentDict(persistent_dict_name)
+        self.states = persistent_dict.PersistentDict(persistent_dict_file)
         self.logger = logging.getLogger(logger_str(__class__))
 
 
@@ -183,7 +183,8 @@ class GhettoClusterSlave(GhettoClusterNode):
         if changed:
             self.logger.info("Pushing states to master")
             file_state.rsync(self.states_filename, 
-                            f"{self.source}/.ghetto_cluster")
+                            f"{self.source}/.ghetto_cluster", 
+                            stfu=True)
         return changed
 
 
@@ -238,7 +239,7 @@ class GhettoCluster:
                     self.logger.info(f"{context}: {master}")
                     gcm = GhettoClusterMaster(context)
                     gcm.scan()
-                    self.get_status(context, False)
+                    self.get_status(context, master, False)
                 self.logger.info("masters are complete.")
             else:
                 self.logger.info("master of None")
@@ -258,16 +259,19 @@ class GhettoCluster:
                     while puller.is_alive():
                         if timer.once_every(15):
                             scanner = Thread(target=gcs.scan)
-                            self.logger.info("Starting scan thread")
+                            self.logger.debug("Starting scan thread")
                             scanner.start()
                             scanner.join()
-                            self.logger.info("Scan thread complete")
+                            self.logger.debug("Scan thread finished")
+                        else:
+                            time.sleep(1) # spin, but not hard
                     gcs.scan()
                 self.logger.info("Slaves are complete")
             else:
                 self.logger.info("slave to noone")
-            CYCLE = int(self.config.getConfig("global", "CYCLE", 60))
-            self.logger.info(f"Done (sleeping for {CYCLE}s)")
+            CYCLE = str_to_duration(self.config.getConfig("global", \
+                                                            "CYCLE", "24h"))
+            self.logger.info(f"Done (sleeping for {duration_to_str(CYCLE)})")
             time.sleep(CYCLE)
 
 
@@ -277,28 +281,23 @@ class GhettoCluster:
             masters = self.config.get_masters_for_host(self.hostname)
             if len(masters.items()) > 0:
                 for context, master in masters.items():
-                    print(f"Master: {context}: {config.path_for(master)}")
-                    self.get_status(context)
+                    self.get_status(context, master)
                 print("-=" * 20 + "-")
             else:
                 print("Not master of anything")
             time.sleep(30)
 
 
-    def get_status(self, context, to_console = True):
+    def get_status(self, context, master, to_console = True):
+        prefix = f"{config.path_for(master)}/.ghetto_cluster/"
+        master_file = f"{prefix}/master.{context}.json"
+        master_states = persistent_dict.PersistentDict(master_file)
+        (files, bytes) = self.sizeof(master_states)
+        print(f"Master: {context}: {config.path_for(master)} " + \
+                f"{files} files, {bytes/2**30:.2f}GB")
         master = self.config.get_master_for_context(context)
-        target = self.sizeof(master, context, "master")
         for slave in self.config.get_slaves_for_context(context):
-            nlines = self.sizeof(master, context, \
-                                 config.host_for(slave))
-            pct_complete = int(100*nlines/target)
-            if nlines == target:
-                msg = f"Complete: {nlines} files: {slave}"
-            elif nlines < target:
-                msg = f"{pct_complete:3d}% {nlines}/{target}: {slave}"
-            else:
-                msg = f"WARNING: too many files in slave {config.host_for(slave)}\n" + \
-                      f"{nlines}/{target}: {slave}"
+            msg = self.inspect_slave(master, master_states, context, slave)
             if to_console:
                 print(msg)
             else:
@@ -306,11 +305,74 @@ class GhettoCluster:
         if to_console:
             print()
 
+    
+    def inspect_slave(self, master, master_states, context, slave):
+        prefix = f"{config.path_for(master)}/.ghetto_cluster/"
+        hostname = config.host_for(slave)
+        slave_file = f"{prefix}/{hostname}.{context}.json"
+        slave_states = persistent_dict.PersistentDict(slave_file)
+        if self.config.getConfig("global", "verbose"):
+            msg = f"{slave} ::\n"
+            missing = mismatch = extra = 0
+            lines = 0
+            for fqde, master_state in master_states.items():
+                if slave_states.contains_p(fqde):
+                    slave_states.touch(fqde)
+                    slave_state = slave_states.get(fqde)
+                    if master_state["size"] != slave_state["size"]:
+                        mismatch += 1
+                        if lines < 10:
+                            msg += f"\tmismatch: {fqde} "
+                            if slave_state["ctime"] > master_state["ctime"]:
+                                msg += "slave is newer"
+                            else:
+                                # TODO: tell how stale it is
+                                msg += f"{duration_to_str(master_state['ctime'] - slave_state['ctime'])} stale"
+                            msg += "\n"
+                            lines += 1
+                else:
+                    missing += 1
+                    if lines < 10:
+                        msg += f"\tmissing: {fqde}\n"
+                        lines += 1
+                if lines == 10:
+                    msg += "\t...\n"
+                    lines = 11
+            extra = len(slave_states.clean_keys())
+            if missing + mismatch + extra != 0:
+                pct = 100 * len(slave_states.items()) / len(master_states.items())
+                if pct > 100:
+                    pct = 100
+                if int(pct) == 100:
+                    pct = 99
+                msg += f"\tmissing: {missing} ({pct:.0f}% complete); " + \
+                        f"mismatched: {mismatch}; " + \
+                        f"extra: {extra}" 
+            else:
+                msg = "Complete: " + msg[:-4]
+        else:
+            (target_files, target_bytes) = \
+                self.sizeof(master_states)
+            (nlines, nbytes) = \
+                self.sizeof(slave_states)
+            pct_complete = int(100*nlines/target_files)
+            if nlines == target_files:
+                msg = f"Complete: {slave}"
+            elif nlines < target_files:
+                msg = f"{pct_complete:3d}% {nlines}/{target_files}: {slave}"
+            else:
+                msg = f"WARNING: too many files in slave " + \
+                        f"{config.host_for(slave)}\n" + \
+                        f"\t{nlines}/{target_files}: {slave}"
+        return msg
 
-    def sizeof(self, master, context, hostname):
-        filename = f"{config.path_for(master)}/.ghetto_cluster/" + \
-                    f"{hostname}.{context}.json"
-        return self.grep_c(filename, "filename")
+
+    def sizeof(self, states):
+        nfiles = nbytes = 0
+        for fqde, state in states.items():
+            nfiles += 1
+            nbytes += state["size"]
+        return (nfiles, nbytes)
 
 
     # it's grep -c, basically
