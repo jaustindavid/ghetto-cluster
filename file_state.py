@@ -113,7 +113,7 @@ def sum_sha256(fname, BLOCKSIZE = 2**20, NBLOCKS = 0):
 
 
 
-def rsync(source, dest, options = []):
+def rsync(source, dest, options = [], **kwargs):
     cfg = config.Config.instance()
     verbose = cfg.getConfig("global", "verbose", False)
     dryrun = cfg.getConfig("global", "dryrun", False)
@@ -156,12 +156,22 @@ def rsync(source, dest, options = []):
         # https://stackoverflow.com/questions/21953835/run-subprocess-and-print-output-to-logging#comment33261012_21953835
         from subprocess import Popen, PIPE, STDOUT
 
-        process = Popen(command, stdout=PIPE, stderr=STDOUT)
-        with process.stdout:
-            for line in iter(process.stdout.readline, b''):
-                # b'\n'-separated lines
-                logger.info("> %s", line.decode().strip())
-            exitcode = process.wait()
+        if "stfu" in kwargs and kwargs["stfu"]:
+            loghole = logger.debug
+        else:
+            loghole = logger.info
+
+        try:
+            process = Popen(command, stdout=PIPE, stderr=STDOUT)
+            with process.stdout:
+                for line in iter(process.stdout.readline, b''):
+                    # b'\n'-separated lines
+                    loghole("> %s", line.decode().strip())
+                exitcode = process.wait()
+        except BaseException:
+            process.terminate()
+            logger.exception("Caught ...something")
+            sys.exit()
 
 
 
