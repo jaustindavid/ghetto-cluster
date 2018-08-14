@@ -69,14 +69,14 @@ class Config:
         if host == self.hostname:
             self.logger.debug("I am master, not pulling the config")
             return
-        self.logger.info(f"pulling config {self.master_config}" \
+        self.logger.debug(f"pulling config {self.master_config}" \
                          f" -> {self.filename}")
         if self.testing:
             self.logger.debug(self.master_config)
             master_config = path_for(self.master_config)
         else:
             master_config = self.master_config
-        file_state.rsync(master_config, self.filename)
+        file_state.rsync(master_config, self.filename, stfu=True)
 
 
     def read_config(self):
