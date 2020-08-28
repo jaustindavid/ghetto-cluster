@@ -1,4 +1,4 @@
-#! python3
+#!/usr/bin/env python3
 
 # <class '__main__.GhettoCluster'> -> GhettoCluster
 def logger_str(classname):
@@ -33,7 +33,7 @@ def duration_to_str(seconds):
 def str_to_duration(string):
     nr = 0
     total = 0
-    while string is not "":
+    while string != "":
         if string[0].isdigit():
             nr = nr*10 + int(string[0])
         elif string[0] == "d":
@@ -53,9 +53,29 @@ def str_to_duration(string):
     return total
 
 
+import unittest
+class TestMyMethods(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    def test_str_to_duration(self):
+        self.assertEqual(str_to_duration("60s"), 60)
+        self.assertEqual(str_to_duration("60m"), 3600)
+        self.assertEqual(str_to_duration("2h"), 2*3600)
+        self.assertEqual(str_to_duration("1h60s"), 3600 + 60)
+        self.assertEqual(str_to_duration("61m"), 3600 + 60)
+        self.assertEqual(str_to_duration("1h1m1s"), 3600 + 60 + 1)
+
+    def test_duration_to_str(self):
+        self.assertEqual(duration_to_str(60), "60s")
+        self.assertEqual(duration_to_str(3600), "60m")
+        self.assertEqual(duration_to_str(2*3600), "2h")
+        self.assertEqual(duration_to_str(3600 + 60), "1h60s")
+        self.assertEqual(duration_to_str(3600 + 60 + 1), "1h1m1s")
 
 if __name__ == "__main__":
-    import random
-    for i in range(3):
-        s = random.randrange(1000000)
-        print(f"{s}s -> {duration_to_str(s)}")
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestMyMethods)
+    unittest.TextTestRunner(verbosity=2).run(suite)

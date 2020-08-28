@@ -1,0 +1,35 @@
+source config: mini-pi:~/gc/config.txt
+
+logfile: ~/gc/gc.log
+cycle: 6h
+lazy write: 10
+ignore suffix: .DS_Store, .fseventsd, .Spotlight-V100, .DocumentRevisions-V100, .sync, .gc/*.tmp
+rsync options: timeout=180
+
+source: mini-pi:/Volumes/Media_ZFS/Movies
+replica: mc-wifi:/mnt/media/Movies
+ignore suffix: mobile, index.html, streams
+rsync options: bwlimit=5m, delete
+
+source: mini-pi:/Volumes/Media_ZFS/Movies/mobile
+replica: imac:/Users/austin/backup/mobile
+ignore suffix: index.html
+rsync options: bwlimit=5m, delete
+
+source: mini-pi:/Volumes/Media_ZFS/Movies
+replica: bucko:/mnt/media/Movies
+ignore suffix: index.html
+rsync options: delete, bwlimit=10m
+
+source: mini-pi:/Volumes/Docs_ZFS/Family Stuff.sparsebundle
+replica: bucko:/mnt/docs/Family Stuff.sparsebundle
+rsync options: delete, bwlimit=10m
+
+source: mini-pi:/Volumes/Docs_ZFS/TMLite.sparsebundle
+replica: imac:/Users/austin/backup/TMLite.sparsebundle
+rsync options: delete
+
+source: mini-pi:/Volumes/Docs_ZFS/Documents.sparsebundle
+replica: imac:/Users/austin/backup/Documents.sparsebundle
+replica: bucko:/mnt/docs/Documents.sparsebundle
+rsync options: delete

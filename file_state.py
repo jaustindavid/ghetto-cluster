@@ -18,8 +18,8 @@ class FileState:
 
     def update(self, genChecksums = False):
         cfg = config.Config.instance()
-        BLOCKSIZE = int(cfg.getConfig("global", "BLOCKSIZE", 2**20))
-        NBLOCKS = int(cfg.getConfig("global", "NBLOCKS", 0))
+        BLOCKSIZE = int(cfg.getOption("BLOCKSIZE", 2**20))
+        NBLOCKS = int(cfg.getOption("NBLOCKS", 0))
         
         if genChecksums:
             self.data['checksum'] = \
@@ -115,8 +115,8 @@ def sum_sha256(fname, BLOCKSIZE = 2**20, NBLOCKS = 0):
 
 def rsync(source, dest, options = [], **kwargs):
     cfg = config.Config.instance()
-    verbose = cfg.getConfig("global", "verbose", False)
-    dryrun = cfg.getConfig("global", "dryrun", False)
+    verbose = cfg.getOption("verbose", "False") == "True"
+    dryrun = cfg.getOption("dryrun", "False") == "True"
 
     #jsrc_host = source[:source.index(':')]
     # dest_host = dest[:dest.index(':')]
@@ -137,16 +137,21 @@ def rsync(source, dest, options = [], **kwargs):
             doctored_dest = re.sub(r' ', '\ ', dest)
         else:
             doctored_dest = dest
-        RSYNC_TIMEOUT = str(cfg.getConfig("global", "RSYNC TIMEOUT", 180))
-        command = [ RSYNC, "-a", "--inplace", "--partial", \
-                    "--timeout", RSYNC_TIMEOUT, \
-                    doctored_source, doctored_dest ]
-        if len(options) > 0:
-            command += options
+        # RSYNC_TIMEOUT = str(cfg.getOption("RSYNC TIMEOUT", 180))
+        command = [ RSYNC, "-a", "--inplace", "--partial" ]
+        #             "--timeout", RSYNC_TIMEOUT ]
+        command += options
         # if len(ignorals) > 0:
         #     command += [ f"--exclude={item}" for item in ignorals ] 
         if True or verbose:
             command += ["-v", "--progress"]
+        # if len(options) > 0:
+        #     print(f"adding options {options}")
+        #     for option in options:
+        #         # command.append(f"--{option}")
+        #         command.append(option)
+        command.append(doctored_source)
+        command.append(doctored_dest)
     logger = logging.getLogger("rsync")
     logger.debug(command)
     if dryrun:
@@ -162,6 +167,7 @@ def rsync(source, dest, options = [], **kwargs):
             loghole = logger.info
 
         try:
+            print(f"running: {command}")
             process = Popen(command, stdout=PIPE, stderr=STDOUT)
             with process.stdout:
                 for line in iter(process.stdout.readline, b''):

@@ -15,14 +15,28 @@ from utils import logger_str
 import elapsed, config
 
 class PersistentDict:
-    def __init__(self, filename):
+    def __init__(self, filename, lazy_timer=0, **kwargs):
         self.masterFilename = filename
         self.transactionName = None
         self.data = {}
         self.logger = logging.getLogger(logger_str(__class__))
+        self.lazy_timer = lazy_timer
+        self.dirty = False
         self.read()
         self.clear_dirtybits()
         self.timer = elapsed.ElapsedTimer()
+        if "metadata" in kwargs:
+            self.metadata_key = kwargs["metadata"]
+        else:
+            self.metadata_key = "__metadata__"
+
+
+    # destructor
+    def __del__(self):
+        return # causes problems with file IO in some cases, racey
+        if self.dirty:
+            self.logger.debug("one last write")
+            self.write()
 
 
     def read(self, verbose = False):
@@ -46,6 +60,7 @@ class PersistentDict:
                         f" saved in {filename}.busted")
             self.data = {}
         self.logger.debug(f"read {len(self.data.items())} items")
+        self.dirty = False
 
 
     def write(self, verbose = False):
@@ -58,19 +73,18 @@ class PersistentDict:
         with open(f"{filename}.tmp", "w") as statefile:
             json.dump(self.data, statefile, sort_keys=True, indent=4)
         os.rename(f"{filename}.tmp", filename)
+        self.dirty = False
 
 
     def lazy_write(self):
-        cfg = config.Config.instance()
-        LAZY_TIMER = cfg.getConfig("global", "LAZY_WRITE", 5)
-        if self.timer.elapsed() > LAZY_TIMER:
+        if self.lazy_timer == 0 or self.timer.elapsed() > self.lazy_timer:
             self.write()
             self.timer.reset()
 
 
     def mkdir(self, filename):
         dir = os.path.dirname(filename)
-        if not os.path.exists(dir):
+        if dir != "" and not os.path.exists(dir):
             os.makedirs(dir)
 
 
@@ -91,6 +105,7 @@ class PersistentDict:
     def set(self, key, value):
         self.data[key] = value
         self.touch(key)
+        self.dirty = True
         self.lazy_write()
 
 
@@ -107,6 +122,10 @@ class PersistentDict:
 
 
     def items(self):
+        if self.metadata_key in self.data:
+            dupe = self.data.copy()
+            del dupe[self.metadata_key]
+            return dupe.items()
         return self.data.items()
             
 
@@ -122,3 +141,14 @@ class PersistentDict:
     # https://stackoverflow.com/questions/3462143/get-difference-between-two-lists
     def clean_keys(self):
         return [key for key in self.data if key not in self.dirtybits]
+
+
+if __name__ == "__main__":
+    import hashlib
+    pd = PersistentDict("pd.json", lazy_write=60)
+    for key in range(100000):
+        h = hashlib.sha256()
+        h.update(f"this is a {key}".encode())
+        pd.set(key, h.hexdigest())
+        if key % 1000 == 0:
+            print(key)

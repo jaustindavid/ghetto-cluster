@@ -1,0 +1,24 @@
+source config: srchost:~/gc/config-test.txt
+ignore suffix: .DS_Store, .fseventsd, .Spotlight-V100, .DocumentRevisions-V100, .sync
+lazy write: 10
+cycle: 21600
+logfile: ~/gc/gc.log
+rsync options: timeout=180
+testing: True
+
+source: bucko:/home/austin/gc/test-data
+replica: mini-pi:/tmp/test-data
+
+source: srchost:/path/to/files
+replica: dsthost1:/mnt/files
+replica: dsthost2:/mnt/files
+ignore suffix: mobile, index.html, streams
+rsync options: bwlimit=10m, delete-after
+
+source: srchost:/path/to/morefiles
+replica: dsthost1:/mnt/morefiles
+rsync options: delete
+
+source: srchost:/path/to/morefiles
+replica: dsthost2:/mnt/morefiles
+ignore suffix: doc

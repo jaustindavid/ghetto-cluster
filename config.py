@@ -1,200 +1,239 @@
 #! python3.x
 
-import platform, os, re, file_state, logging, sys
+import platform, os, re, logging, sys
 from singleton import Singleton
-from utils import logger_str
+from rsync import rsync
 
 
 """
 Usage:
+config.txt:
+    source config: mini-pi:~/gc/config.txt
+
+    ignore suffix: .DS_Store, .fseventsd, .Spotlight-V100, .DocumentRevisions-V100, .sync
+    options: LAZY WRITE: 10, RSYNC TIMEOUT: 180, CYCLE: 21600, LOGFILE: ~/gc/gc.log
+
+    source: mini-pi:/Volumes/Media_ZFS/Movies
+    replica: mc-wifi:/mnt/disk1/Movies
+    ignore suffix: mobile, index.html, streams
+
+#! python
   cfg = config.Config.instance()
-   ... ONCE on startup: cfg.init(filename)
+  # ... ONCE on startup: 
+  cfg.init(filename)
   periodically:
     cfg.load()
 
 
 Theory of Operation:
-    Config holds context:key:value settings, including a 
-        "global" context (getConfig, setConfig)
-        setConfig(context, key, value)
-        getConfig(context, key) => value
+    Config holds context:key:value settings; "global" is context 0, 
+        "local" contexts are numbered serially 1..N.  There is no 
+        nesting of contexts.
+            setConfig(context, key, value)
+            getConfig(context, key) => value
 
-    Config holds "master" and "slave" contexts:
-        get_masters_for_host(hostname) -> { context : master }
-        get_slaves_for_host(hostname) -> { context : slave }
-        get_master_for_context(context) -> "master"
-        get_slaves_for_context(context) -> [ slaves ]
+    Config holds "source" and "replica" contexts:
+        get_sources_for_host(hostname) -> { context : source }
+        get_replicas_for_host(hostname) -> { context : replica }
+        get_source_for_context(context) -> "source"
+        get_replicas_for_context(context) -> [ replicas ]
 
-    A master would iterate over get_masters_for_host(hostname),
-        then for each master get_slaves_for_context(context)
-    A slave would iterate over get_slaves_for_host(hostname), 
-        then for each slave get_master_for_context(context) 
+    A source would iterate over get_sources_for_host(hostname),
+        then for each source get_replicas_for_context(context)
+    A replica would iterate over get_replicas_for_host(hostname), 
+        then for each replica get_source_for_context(context) 
 
 """
 
 @Singleton
 class Config:
     def __init__(self):
-        self.master_config = None
-        self.data = {}
+        self.source_config = None
         self.config = {}
-        self.verbose = False
-        self.masters = {}
-        self.slaves = {}
-        self.logger = logging.getLogger(logger_str(__class__))
+        self.verbose = True
+        self.sources = {}
+        self.replicas = {}
+        self.logger = logging.getLogger("gc.Config")
+        self.logger.setLevel(logging.INFO)
 
 
     def init(self, filename, hostname = None, testing = False):
+        if not filename.startswith("/"):
+            filename = os.getcwd() + "/" + filename
         self.filename = filename
         if hostname is None:
             self.hostname = platform.node()
         else:
             self.hostname = hostname
         self.testing = testing
-        self.verbose = self.getConfig("global", "verbose", False)
         # prime the config (can't pull yet)
         self.read_config()
         # load for realz
         self.load()
+        self.verbose = self.getConfig(0, "verbose", False)
 
 
     # if testing, just copy the thing (rsync w/o hostnames)
     #   otherwise, rsync to the config filename
-    def pull_master_config(self):
-        if self.master_config is None:
+    def pull_source_config(self):
+        if self.source_config is None:
             self.logger.error(f"ERROR: {self.filename} MUST contain a " \
-                             f"\"master config:\" line")
+                             f"\"source config:\" line")
             sys.exit(1)
-        host = host_for(self.master_config)
+        host = host_for(self.source_config)
         if host == self.hostname:
-            self.logger.debug("I am master, not pulling the config")
+            self.logger.debug("I am source, not pulling the config")
             return
-        self.logger.debug(f"pulling config {self.master_config}" \
+        self.logger.debug(f"pulling config {self.source_config}" \
                          f" -> {self.filename}")
         if self.testing:
-            self.logger.debug(self.master_config)
-            master_config = path_for(self.master_config)
+            self.logger.debug(self.source_config)
+            source_config = path_for(self.source_config)
         else:
-            master_config = self.master_config
-        file_state.rsync(master_config, self.filename, stfu=True)
+            source_config = self.source_config
+        rsync(source_config, self.filename, stfu=True)
 
 
     def read_config(self):
         self.logger.debug("Loading the config")
-        master = None
+        source = None
         context = 0
         try:
             with open(self.filename, "r") as file:
                 for line in file:
                     tokens = line.strip().split(": ", 1)
                     self.logger.debug(f"> {line.strip()}") 
-                    if tokens[0] == "master config" and master is None:
-                        self.master_config = tokens[1]
-                    if tokens[0] == "master":
-                        master = tokens[1]
+                    if tokens[0] == "source config" and source is None:
+                        self.source_config = tokens[1]
+                        # fallthrough to tokens...
+                        # self.config[0] = {}
+                        # self.config[0]["source config"] = self.source_config
+                    if tokens[0] == "source":
+                        source = tokens[1]
                         context += 1
-                        self.data[master] = []
-                        self.masters[context] = master
-                        self.slaves[context] = []
-                    elif tokens[0] == "slave":
-                        slave = tokens[1]
-                        self.data[master].append(slave)
-                        self.slaves[context].append(slave)
+                        self.config[context] = {}
+                        self.config[context]["source"] = source
+                        self.config[context]["replicas"] = []
+                        # self.sources[context] = source
+                        # self.replicas[context] = []
+                    elif tokens[0] == "replica":
+                        replica = tokens[1]
+                        # self.data[source].append(replica)
+                        self.config[context]["replicas"].append(replica)
+                        # self.replicas[context].append(replica)
                     elif len(tokens) == 2:
-                        # not a "master" or "slave", must be a config option
-                        self.setConfig(master, tokens[0], tokens[1])
+                        # not a "source" or "replica", must be a config option
+                        # self.setConfig(source, tokens[0], tokens[1])
                         self.setConfig(context, tokens[0], tokens[1])
-            self.logger.debug(self.data)
+            self.logger.debug(self.config)
         except BaseException:
             self.logger.exception("Fatal error reading config")
             self.logger.error(f"Confirm {self.filename} is readable")
             sys.exit(1)
-        self.process_global_options()
+        # self.process_global_options()
 
 
     def load(self):
-        self.pull_master_config()
+        if not self.testing:
+            self.pull_source_config()
         self.read_config()
 
     
+    # explodes source config\n options: KEY: VALUE, KEY2: VALUE2
+    #   into { 0: { key: value, key2: value2 } }
     def process_global_options(self):
-        options = self.getConfig("global", "options") 
+        options = self.getConfig(0, "options") 
         if options is None:
             return
-        if type(options) is str:
-            self.process_option("global", options)
-        else:
-            for option in options:
-                self.process_option("global", option)
+        for option in options:
+            # "LAZY WRITE: 10" -> key, value
+            tokens = option.split(": ")
+            self.setConfig(0, tokens[0], tokens[1])
+            self.logger.debug(f"global option {tokens[0]} => {tokens[1]}")
 
 
-    # "LAZY WRITE: 10" -> key, value
-    def process_option(self, context, option):
-        tokens = option.split(": ")
-        self.setConfig(context, tokens[0], tokens[1])
-        self.logger.debug(f"option {context}:{tokens[0]} => {tokens[1]}")
+    # a simplified wrapper for getConfig(0, option)
+    def getOption(self, option, default=None):
+        return self.getConfig(0, option, default)[0]
 
 
-    def get_masters_for_host(self, hostname):
-        masters = {}
-        for context, master in self.masters.items():
-            if host_for(master) == hostname:
-                masters[context] = master
-        return masters
+    # a simplified wrapper for setConfig(0, option, value)
+    def setOption(self, option, value):
+        return self.setConfig(0, option, value)
 
 
-    def get_slaves_for_host(self, hostname):
-        slaves = {}
-        for context, slave_list in self.slaves.items():
-            for slave in slave_list:
-                if host_for(slave) == hostname:
-                    slaves[context] = slave
-        return slaves
+    def get_sources_for_host(self, hostname):
+        sources = {}
+        for context in self.config.keys():
+            if "source" in self.config[context]:
+                if host_for(self.config[context]["source"]) == hostname:
+                    sources[context] = self.config[context]["source"]
+        return sources
 
 
-    def get_master_for_context(self, context):
-        return self.masters[context]
+    def get_replicas_for_host(self, hostname):
+        replicas = {}
+        for context in self.config.keys():
+            if "replicas" in self.config[context]:
+                for replica in self.config[context]["replicas"]:
+                    if host_for(replica) == hostname:
+                        replicas[context] = replica
+        return replicas
 
 
-    def get_slaves_for_context(self, context):
-        return self.slaves[context]
+    def get_source_for_context(self, context):
+        # return self.sources[context]
+        return self.config[context]["source"]
+
+
+    def get_replicas_for_context(self, context):
+        # return self.replicas[context]
+        return self.config[context]["replicas"]
 
 
     def get_dirs(self, hostname = None):
-        masters = []
-        slaves = {}
+        sources = []
+        replicas = {}
         if hostname == None:
             hostname = self.hostname
         for key, values in self.data.items():
             if key.startswith(hostname):
-                masters.append(key)
+                sources.append(key)
             else:
                 for value in values:
                     if value.startswith(hostname):
-                        slaves[value] = key
-        return masters, slaves
+                        replicas[value] = key
+        return sources, replicas
+
+
+    def get_ignorals(self, context):
+        ignorals = [] # ".gc" ] # actually we should ship this around
+        if "ignore suffix" in self.config[0]:
+            ignorals += self.getConfig(0, "ignore suffix")
+        # print(f"ignorals w/ global: {ignorals}")
+        if "ignore suffix" in self.config[context]:
+            ignorals += self.getConfig(context, "ignore suffix")
+        # print(f"ignorals + {context}: {ignorals}")
+        return ignorals
 
 
     def setConfig(self, context, key, value):
-        self.logger.debug(f"setting {context}:{key} => {value}")
+        self.logger.debug(f"setting {context}: {key} => {value}")
         if context == None:
-            context = 'global'
+            context = 0
         if context not in self.config:
             self.config[context] = {}
-        if type(value) is str and ", " in value:
-            self.config[context][key] = value.split(", ")
-        else:
-            self.config[context][key] = value
+        self.config[context][key] = value.split(", ")
 
             
-    def getConfig(self, context, key, default=None):
+    def getConfig(self, context, key, default=None, follow=True):
         if context in self.config:
             if key in self.config[context]:
                 return self.config[context][key]
-            if key in self.config["global"]:
-                return self.config["global"][key]
+            if follow and key in self.config[0]:
+                return self.config[0][key]
         # print(f"Failed to find {context}=>{key}")
-        return default
+        return [default]
 
 
 
