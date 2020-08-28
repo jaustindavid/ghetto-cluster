@@ -53,7 +53,7 @@ class GhettoClusterNode:
         while True:
             self.stats(pretty=True)
             self.logger.info("-=" * 20 + "-")
-            time.sleep(15)
+            time.sleep(30)
 
 
     def run(self):
