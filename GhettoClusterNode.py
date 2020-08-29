@@ -9,6 +9,9 @@ from utils import str_to_duration, duration_to_str
 class WakeupException(Exception):
     pass
 
+class TermException(Exception):
+    pass
+
 
 # a Node has 0 or more sources, 0 or more replicas
 class GhettoClusterNode:
@@ -78,25 +81,32 @@ class GhettoClusterNode:
 
 
     def run_forever(self):
-        while True:
-            self.run()
-            try:
-                signal.signal(signal.SIGHUP, self.wakeup)
+        try:
+            signal.signal(signal.SIGHUP, self.wakeup)
+            signal.signal(signal.SIGTERM, self.go_peacefully)
+            while True:
+                self.run()
                 CYCLE = str_to_duration(self.config.getOption("cycle", "24h"))
                 self.logger.info(f"Sleeping for {duration_to_str(CYCLE)}" + \
                                     f" in PID {os.getpid()}")
                 self.logger.debug("send SIGHUP to wake up")
                 time.sleep(CYCLE)
-            except WakeupException:
-                self.logger.warn(f"Restarting as requested (SIGHUP)")
-                signal.signal(signal.SIGHUP, signal.SIG_DFL)
-            except KeyboardInterrupt:
-                self.logger.warn(f" Exiting...")
-                sys.exit()
+        except WakeupException:
+            self.logger.warn(f"Restarting as requested (SIGHUP)")
+            signal.signal(signal.SIGHUP, signal.SIG_DFL)
+        except TermException:
+            self.logger.warn(f"Exiting for SIGTERM")
+            sys.exit()
+        except KeyboardInterrupt:
+            self.logger.warn(f" Exiting...")
+            sys.exit()
 
 
     def wakeup(self, signum, frame):
         raise WakeupException from None
+
+    def go_peacefully(self, signum, frame):
+        raise TermException from None
 
 
 import unittest

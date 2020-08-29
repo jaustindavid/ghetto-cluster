@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+#
+# 0 0 * * * ~/gc/gc.py -c ~/gc/config.txt -d # -h HOSTNAME
+#
+
 import sys, getopt, os, signal, logging, platform, daemonize
 import config, GhettoClusterNode, GhettoClusterReplica
 
@@ -73,11 +77,13 @@ def main(argv):
         logging.basicConfig(format='%(asctime)s [%(name)s] %(message)s',
                             handlers=[fh], level=logging.DEBUG)
         keep_fds = [fh.stream.fileno()]
+        logger.info("Starting daemon . . .")
+        fh.flush()
         daemon = daemonize.Daemonize(app="ghetto-cluster", \
                          pid=PIDFILE, action=gcn.run_forever, \
                          keep_fds=keep_fds)
+                         # logger=logger)
         print("Starting ...")
-        logger.info("Starting daemon...")
         daemon.start()
         # never returns
         return
