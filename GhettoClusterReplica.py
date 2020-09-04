@@ -78,6 +78,14 @@ class GhettoClusterReplica:
         self.logger.info(f"Finished: {self.context}:{self.path}")
         
 
+    def scan_only(self):
+        self.logger.info(f"Scanning {self.context}:{self.path}")
+        ignorals = self.config.get_ignorals(self.context)
+        scn = scanner.Scanner(self.path, ignorals, self.states_filename)
+        scn.scan()
+        self.push()
+        self.logger.info(f"Finished: {self.context}:{self.path}")
+
 
 import unittest
 class TestMyMethods(unittest.TestCase):

@@ -26,7 +26,7 @@ def kill_and_exit():
 
 def main(argv):
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "1c:dh:knstv")
+        opts, args = getopt.getopt(sys.argv[1:], "1c:dh:knstvz")
     except getopt.GetoptError as err:
         print(err)
         sys.exit(1)
@@ -38,6 +38,7 @@ def main(argv):
     status = False
     testing = False
     verbose = False
+    scan_only = False
     logger = logging.getLogger(__name__)
     for opt, arg in opts:
         if opt == "-1":
@@ -60,6 +61,8 @@ def main(argv):
         elif opt == "-v":
             cfg.setOption("verbose", "True")
             verbose = True
+        elif opt == "-z":
+            scan_only = True
         else:
             assert False, "Unhandled option"
     gcn = GhettoClusterNode.GhettoClusterNode(configfile, hostname)
@@ -92,10 +95,12 @@ def main(argv):
     if status:
         if once:
             gcn.stats()
-            return
         else:
             gcn.stats_forever()
         # never returns
+        return
+    if scan_only:
+        gcn.run(True)
         return
     if once:
         gcn.run()
