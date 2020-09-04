@@ -59,7 +59,7 @@ class GhettoClusterNode:
             time.sleep(30)
 
 
-    def run(self):
+    def run(self, scan_only=False):
         self.logger.info(f"Running for {self.hostname}")
         self.config.load()
         sources = self.config.get_sources_for_host(self.hostname)
@@ -74,7 +74,10 @@ class GhettoClusterNode:
         if len(replicas.items()) > 0:
             for context, replica in replicas.items():
                 gcr = GhettoClusterReplica(context, replica, self.testing)
-                gcr.run()
+                if scan_only:
+                    gcr.scan_only()
+                else:
+                    gcr.run()
                 gcr.get_status()
         else:
             self.logger.info(f"I host no replicas")

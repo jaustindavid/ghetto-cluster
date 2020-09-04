@@ -90,7 +90,11 @@ def main(argv):
     logging.basicConfig(format='%(message)s', level=logLevel)
     # logger.setLevel(logLevel)
     if status:
-        gcn.stats_forever()
+        if once:
+            gcn.stats()
+            return
+        else:
+            gcn.stats_forever()
         # never returns
         return
     if once:

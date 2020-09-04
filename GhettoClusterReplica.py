@@ -67,7 +67,7 @@ class GhettoClusterReplica:
         ignorals = self.config.get_ignorals(self.context)
         scn = scanner.Scanner(self.path, ignorals, self.states_filename)
         while puller.is_alive():
-            if timer.once_every(15):
+            if timer.once_every(60):
                 scn.scan()
                 self.push()
             else:
