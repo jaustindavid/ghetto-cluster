@@ -59,6 +59,18 @@ class GhettoClusterNode:
             time.sleep(30)
 
 
+    def restore(self):
+        sources = self.config.get_sources_for_host(self.hostname)
+        if len(sources.items()) > 0:
+            print(f"To restore stuff on {self.hostname}:")
+            for context, source, in sources.items():
+                gcs = GhettoClusterSource(context, source, self.testing)
+                print("")
+                gcs.restore()
+        else:
+            print("I host no sources; nothing to restore")
+
+
     def run(self, scan_only=False):
         self.logger.info(f"Running for {self.hostname}")
         self.config.load()
@@ -78,7 +90,7 @@ class GhettoClusterNode:
                     gcr.scan_only()
                 else:
                     gcr.run()
-                gcr.get_status()
+                gcr.get_status(brief=True)
         else:
             self.logger.info(f"I host no replicas")
 
@@ -103,6 +115,32 @@ class GhettoClusterNode:
         except KeyboardInterrupt:
             self.logger.warn(f" Exiting...")
             sys.exit()
+
+
+    # TODO: this
+    def cleanup_gc_dir(self):
+        self.logger.warn("Cleanup time")
+        sources = self.config.get_sources_for_host(self.hostname)
+        valid_files = []
+        if len(sources.items()) > 0:
+            for context, source, in sources.items():
+                # append source
+                valid_files.append(f"")
+                # append all replicas
+        replicas = self.config.get_replicas_for_context(self.context)
+        if len(replicas) > 0:
+            for replica in replicas:
+                statefile = f"{config.host_for(replica)}.{self.context}.json"
+                valid_files.append(statefile)
+        else:
+            print("wat")
+        print(f"Valid files: {valid_files}")
+        json_files = [f for f in os.listdir(self.path) \
+                            if os.path.isfile(os.path.join(self.path, f)) \
+                                and f.endswith("json")]
+        for json_file in json_files:
+            if json_file not in valid_files:
+                self.logger.info(f"extraneous file: {json_file}")
 
 
     def wakeup(self, signum, frame):

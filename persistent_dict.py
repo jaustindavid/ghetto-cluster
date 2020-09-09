@@ -54,7 +54,8 @@ class PersistentDict:
                 if self.data is None:
                     self.logger.debug("json.load() -> self.data is None")
                     self.data = {}
-        except json.decoder.JSONDecodeError:
+        except json.decoder.JSONDecodeError as err:
+            self.logger.warn(err.message)
             os.rename(filename, f"{filename}.busted")
             self.logger.warn(f"whoopsie, JSONDecodeError;" \
                         f" saved in {filename}.busted")
@@ -70,9 +71,19 @@ class PersistentDict:
             filename = self.masterFilename
         self.logger.debug(f"writing data: {filename}")
         self.mkdir(filename)
-        with open(f"{filename}.tmp", "w") as statefile:
+        tmpfile = f"{filename}.tmp"
+        ntries = 0
+        # TODO: protect this ... better
+        while os.path.exists(tmpfile) and ntries < 6:
+            logger.debug(f"{tmpfile} exists; waiting 5")
+            time.sleep(5)
+            ntries += 1
+        with open(tmpfile, "w") as statefile:
             json.dump(self.data, statefile, sort_keys=True, indent=4)
-        os.rename(f"{filename}.tmp", filename)
+        try:
+            os.rename(tmpfile, filename)
+        except:
+            self.logger.warn(f"failed to rename tmpfile; ignoring")
         self.dirty = False
 
 

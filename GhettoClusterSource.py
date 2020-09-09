@@ -49,9 +49,14 @@ class GhettoClusterSource:
         stats.get_status_for_source(self.context, self.source)
 
 
+    def restore(self):
+        print(f"{self.source}:")
+        for replica in self.config.get_replicas_for_context(self.context):
+            print(f"\trsync -av {replica}/ {self.path}")
+
+
     def run(self):
         self.logger.info(f"Running for {self.context}:{self.source}")
         ignorals = self.config.get_ignorals(self.context)
         scn = scanner.Scanner(self.path, ignorals, self.states_filename)
         scn.scan()
-        # TODO: clean up any invalid replicas

@@ -4,10 +4,29 @@
 # 0 0 * * * ~/gc/gc.py -c ~/gc/config.txt -d # -h HOSTNAME
 #
 
+
 import sys, getopt, os, signal, logging, platform, daemonize
 import config, GhettoClusterNode, GhettoClusterReplica
+import pid
 
-PIDFILE = "/tmp/gc.pid"
+
+PIDFILE = "/var/run/lock/gc.pid"
+
+
+def lock_or_die():
+    try:
+        pidlock = pid.PidFile(PIDFILE)
+        pidlock.create()
+        # print(f"Locked on {PIDFILE}")
+        return pidlock
+    except pid.PidFileError:
+        print(f"Failed to lock; check {PIDFILE}")
+        sys.exit(1)
+
+
+def release(pidlock):
+    pidlock.close()
+
 
 def kill_and_exit():
     global PIDFILE
@@ -26,7 +45,7 @@ def kill_and_exit():
 
 def main(argv):
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "1c:dh:knstvz")
+        opts, args = getopt.getopt(sys.argv[1:], "1c:dh:knrstvz")
     except getopt.GetoptError as err:
         print(err)
         sys.exit(1)
@@ -39,6 +58,7 @@ def main(argv):
     testing = False
     verbose = False
     scan_only = False
+    restore = False
     logger = logging.getLogger(__name__)
     for opt, arg in opts:
         if opt == "-1":
@@ -54,9 +74,11 @@ def main(argv):
         elif opt == "-n":
             cfg.setOption("dryrun", "True")
             logger.info("DRYRUN mode: no files will be copied")
+        elif opt == "-r":
+            restore = True
         elif opt == "-s":
             status = True
-        elif opt == "-t":
+        elif opt == "-t": # TODO: remove
             cfg.setOption("testing", "True")
         elif opt == "-v":
             cfg.setOption("verbose", "True")
@@ -65,13 +87,13 @@ def main(argv):
             scan_only = True
         else:
             assert False, "Unhandled option"
-    gcn = GhettoClusterNode.GhettoClusterNode(configfile, hostname)
     if verbose:
         logLevel = logging.DEBUG
     else:
         logLevel = logging.INFO
+    gcn = GhettoClusterNode.GhettoClusterNode(configfile, hostname)
+
     if as_daemon:
-        global PIDFILE
         logfile = os.path.expanduser(cfg.getOption("logfile", "gc.log"))
         fh = logging.handlers.RotatingFileHandler( \
                 logfile, maxBytes=10*2**20, backupCount=5)
@@ -79,33 +101,29 @@ def main(argv):
         logger.addHandler(fh)
         logging.basicConfig(format='%(asctime)s [%(name)s] %(message)s',
                             handlers=[fh], level=logging.DEBUG)
-        keep_fds = [fh.stream.fileno()]
-        logger.info("Starting daemon . . .")
-        fh.flush()
-        daemon = daemonize.Daemonize(app="ghetto-cluster", \
-                         pid=PIDFILE, action=gcn.run_forever, \
-                         keep_fds=keep_fds)
-                         # logger=logger)
-        print("Starting ...")
-        daemon.start()
-        # never returns
-        return
-    logging.basicConfig(format='%(message)s', level=logLevel)
-    # logger.setLevel(logLevel)
-    if status:
+        once = True
+        status = False
+        scan_only = False
+        # fall through to gc.run()
+    else:
+        logging.basicConfig(format='%(message)s', level=logLevel)
+
+    if restore:
+        gcn.restore()
+    elif status:
         if once:
             gcn.stats()
         else:
             gcn.stats_forever()
-        # never returns
-        return
-    if scan_only:
+    elif scan_only:
         gcn.run(True)
-        return
-    if once:
-        gcn.run()
     else:
-        gcn.run_forever()
+        pidlock = lock_or_die()
+        if once:
+            gcn.run()
+        else:
+            gcn.run_forever()
+        release(pidlock)
 
 
 if __name__ == "__main__":

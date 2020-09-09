@@ -165,7 +165,8 @@ class Config:
     def get_sources_for_host(self, hostname):
         sources = {}
         for context in self.config.keys():
-            if "source" in self.config[context]:
+            if "source" in self.config[context] \
+                and "False" in self.getConfig(context, 'disabled', 'False'):
                 if host_for(self.config[context]["source"]) == hostname:
                     sources[context] = self.config[context]["source"]
         return sources
@@ -174,7 +175,8 @@ class Config:
     def get_replicas_for_host(self, hostname):
         replicas = {}
         for context in self.config.keys():
-            if "replicas" in self.config[context]:
+            if "replicas" in self.config[context] \
+                and "False" in self.getConfig(context, 'disabled', 'False'):
                 for replica in self.config[context]["replicas"]:
                     if host_for(replica) == hostname:
                         replicas[context] = replica

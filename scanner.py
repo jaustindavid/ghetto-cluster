@@ -34,6 +34,10 @@ class Scanner:
     def scandir(self, path, ignorals):
         if path.startswith("./"):
             path = path[2:]
+        # ignore .gc directory entirely
+        if path == ".gc":
+            # print("skipping .gc")
+            return
         self.logger.debug(f"scanning path {path}, ignoring {ignorals}")
         try:
             direntries = os.listdir(path)

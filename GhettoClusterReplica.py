@@ -28,6 +28,7 @@ class GhettoClusterReplica:
     def pull(self):
         self.logger.debug("Pulling")
         # print(f"running for {self.path} <= {self.source}")
+        self.logger.info(f"pulling {self.path} <= {self.source}")
         args = [ "-a" ]
         if self.verbose:
             args.append("-v")
@@ -40,10 +41,20 @@ class GhettoClusterReplica:
         self.logger.debug("Starting rsync pull...")
         self.logger.debug(f"rsync {' '.join(args)} {self.source} {self.path}")
         rsync.rsync(self.source, self.path, args)
+        self.pull_states()
+
+
+    def pull_states(self):
+        self.logger.info("  Pulling source state")
+        args = [ "--delete", "-a" ]
+        if self.verbose:
+            args.append("-v")
+        rsync.rsync(f"{self.source}.gc", self.path, 
+                    args, stfu=False)
 
 
     def push(self):
-        self.logger.info("  Pushing states to source")
+        self.logger.info("  Pushing replica state to source")
         if self.verbose:
             args = [ "-v" ]
         else:
@@ -52,10 +63,10 @@ class GhettoClusterReplica:
                     args, stfu=False)
 
 
-    def get_status(self):
+    def get_status(self, brief=False):
         self.logger.debug(f"Getting status for {self.context}:{self.replica}")
         stats = statusfier.Statusfier()
-        stats.get_status_for_replica(self.context, self.replica)
+        stats.get_status_for_replica(self.context, self.replica, brief)
 
 
     def run(self):
@@ -67,9 +78,10 @@ class GhettoClusterReplica:
         ignorals = self.config.get_ignorals(self.context)
         scn = scanner.Scanner(self.path, ignorals, self.states_filename)
         while puller.is_alive():
-            if timer.once_every(60):
+            if timer.once_every(300):
                 scn.scan()
                 self.push()
+                self.get_status(brief=True)
             else:
                 time.sleep(1)
         puller.join()
@@ -84,6 +96,7 @@ class GhettoClusterReplica:
         scn = scanner.Scanner(self.path, ignorals, self.states_filename)
         scn.scan()
         self.push()
+        self.get_status(brief=True)
         self.logger.info(f"Finished: {self.context}:{self.path}")
 
 
