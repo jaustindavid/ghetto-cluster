@@ -47,7 +47,7 @@ class Scanner:
             if self.ignoring(ignorals, dirent):
                 continue
             fqde = f"{path}/{dirent}"
-            self.logger.debug(f"scanning {fqde}")
+            # self.logger.debug(f"scanning {fqde}")
             if os.path.isdir(fqde):
                 self.scandir(fqde, ignorals)
             else:

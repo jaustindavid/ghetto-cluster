@@ -3,6 +3,8 @@
 import config, logging, pprint
 import persistent_dict, scanner, statusfier
 import os, os.path
+from statusfier import state_filename
+
 
 # a Node may have 0 or more Sources
 # they may run() in an independent thread
@@ -19,6 +21,24 @@ class GhettoClusterSource:
         self.states_filename = f"{self.path}/.gc/{hostname}.{context}.json"
         self.states = persistent_dict.PersistentDict(self.states_filename, \
                         self.config.getOption("LAZY_WRITE", 5))
+
+
+    # deletes the contexts I care about
+    def cleanup(self):
+        self.logger.debug("Cleaning up at source")
+        source_file = state_filename(self.context, self.source, self.source)
+        if os.path.exists(source_file):
+            self.logger.info(f"unlinking {source_file}")
+            os.unlink(source_file)
+        else:
+            self.logger.info(f"{source_file} is already gone")
+        for replica in self.config.get_replicas_for_context(self.context):
+            replica_file = state_filename(self.context, self.source, replica)
+            if os.path.exists(replica_file):
+                self.logger.info(f"unlinking {replica_file}")
+                os.unlink(replica_file)
+            else:
+                self.logger.info(f"{replica_file} is already gone")
 
 
     # TODO: this doesn't work.  It needs to happen at a higher level,

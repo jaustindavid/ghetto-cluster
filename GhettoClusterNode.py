@@ -24,6 +24,21 @@ class GhettoClusterNode:
         self.verbose = self.config.getOption("verbose", "False") == "True"
 
 
+    def cleanup(self):
+        self.logger.info("Cleaning all history")
+        sources = self.config.get_sources_for_host(self.hostname)
+        if len(sources.items()) > 0:
+            for context, source in sources.items():
+                gcs = GhettoClusterSource(context, source)
+                gcs.cleanup()
+                
+        replicas = self.config.get_replicas_for_host(self.hostname)
+        if len(replicas.items()) > 0:
+            for context, replica in replicas.items():
+                gcr = GhettoClusterReplica(context, replica)
+                gcr.cleanup()
+
+
     def stats(self, pretty=False):
         self.config.load()
         sources = self.config.get_sources_for_host(self.hostname)
@@ -71,7 +86,7 @@ class GhettoClusterNode:
             print("I host no sources; nothing to restore")
 
 
-    def run(self, scan_only=False):
+    def run(self, scan_only=False, deleting=False):
         self.logger.info(f"Running for {self.hostname}")
         self.config.load()
         sources = self.config.get_sources_for_host(self.hostname)
@@ -95,7 +110,7 @@ class GhettoClusterNode:
             self.logger.info(f"I host no replicas")
 
 
-    def run_forever(self):
+    def run_forever(self, deleting=False):
         try:
             signal.signal(signal.SIGHUP, self.wakeup)
             signal.signal(signal.SIGTERM, self.go_peacefully)

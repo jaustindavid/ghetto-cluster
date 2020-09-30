@@ -64,6 +64,19 @@ class Statusfier:
         return latency < str_to_duration(self.config.getOption("cycle", "24h"))
 
 
+    def replica_overage(self, source_states, replica_states):
+        n = 0
+        msg = "\tIn replica, but not in source:\n"
+        for name, state in replica_states.items():
+            if not source_states.contains_p(name):
+                msg += f"\t  {name}: {state['size']}\n"
+                n += 1
+                if n >= 10:
+                    msg += "  ...\n"
+                    break
+        return msg
+
+
     # returns a line or two of text, ex:
     #  Replica bucko:/mnt/docs/Family Stuff.sparsebundle: 100% 81961/81961
     #         Current; last update 2h20m31s ago
@@ -81,9 +94,12 @@ class Statusfier:
                 + f"{replica_bytes/2**30:.2f}GB"
         if brief:
             return msg
-        else:
-            latency = self.replica_latency(source_states, replica_states)
-            return msg + "\n\t" + self.state_latency(replica_states)
+        latency = self.replica_latency(source_states, replica_states)
+        msg += "\n\t" + self.state_latency(replica_states)
+        if replica_files > target_files:
+            msg += "\n" + self.replica_overage(source_states, replica_states)
+        return msg
+
 
 
     def get_status_for_source(self, context, source):

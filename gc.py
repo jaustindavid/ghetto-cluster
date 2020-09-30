@@ -45,13 +45,16 @@ def kill_and_exit():
 
 def main(argv):
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "1c:dh:knrstvz")
+        opts, args = getopt.getopt(sys.argv[1:], "1c:dh:knrstvz", 
+                                    ["delete", "cleanup"])
     except getopt.GetoptError as err:
         print(err)
         sys.exit(1)
     cfg = config.Config.instance()
     configfile = "config.txt"
     as_daemon = False
+    cleanup = False
+    deleting = False
     hostname = platform.node()
     once = False
     status = False
@@ -65,8 +68,12 @@ def main(argv):
             once = True
         elif opt == "-c":
             configfile = arg
+        elif opt == "--cleanup":
+            cleanup = True
         elif opt == "-d":
             as_daemon = True
+        elif opt == "--delete":
+            deleting = True
         elif opt == "-h":
             hostname = arg
         elif opt == "-k":
@@ -117,12 +124,14 @@ def main(argv):
             gcn.stats_forever()
     elif scan_only:
         gcn.run(True)
+    elif cleanup:
+        gcn.cleanup()
     else:
         pidlock = lock_or_die()
         if once:
-            gcn.run()
+            gcn.run(deleting=deleting)
         else:
-            gcn.run_forever()
+            gcn.run_forever(deleting=deleting)
         release(pidlock)
 
 

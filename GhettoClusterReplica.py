@@ -5,6 +5,7 @@ import persistent_dict, rsync, scanner, statusfier
 import signal, elapsed, time, os
 from threading import Thread
 from utils import str_to_duration, duration_to_str
+from statusfier import state_filename
 
 
 # a Node may have 0 or more Replicas; 
@@ -61,6 +62,16 @@ class GhettoClusterReplica:
             args = []
         rsync.rsync(self.states_filename, f"{self.source}.gc", 
                     args, stfu=False)
+
+
+    def cleanup(self):
+        replica_file = state_filename(self.context, self.source, self.replica)
+        if os.path.exists(replica_file):
+            self.logger.info(f"unlinking {replica_file}")
+            os.unlink(replica_file)
+        else:
+            self.logger.info(f"{replica_file} is already gone")
+
 
 
     def get_status(self, brief=False):
