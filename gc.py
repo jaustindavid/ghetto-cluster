@@ -46,7 +46,7 @@ def kill_and_exit():
 def main(argv):
     try:
         opts, args = getopt.getopt(sys.argv[1:], "1c:dh:knrstvz", 
-                                    ["delete", "cleanup"])
+                                    ["delete", "cleanup", "once"])
     except getopt.GetoptError as err:
         print(err)
         sys.exit(1)
@@ -64,7 +64,7 @@ def main(argv):
     restore = False
     logger = logging.getLogger(__name__)
     for opt, arg in opts:
-        if opt == "-1":
+        if opt in ("-1", "--once"):
             once = True
         elif opt == "-c":
             configfile = arg
@@ -92,6 +92,7 @@ def main(argv):
             verbose = True
         elif opt == "-z":
             scan_only = True
+            once = True
         else:
             assert False, "Unhandled option"
     if verbose:
@@ -122,14 +123,12 @@ def main(argv):
             gcn.stats()
         else:
             gcn.stats_forever()
-    elif scan_only:
-        gcn.run(True)
     elif cleanup:
         gcn.cleanup()
     else:
         pidlock = lock_or_die()
         if once:
-            gcn.run(deleting=deleting)
+            gcn.run(scan_only=scan_only, deleting=deleting)
         else:
             gcn.run_forever(deleting=deleting)
         release(pidlock)

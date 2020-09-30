@@ -26,7 +26,7 @@ class GhettoClusterReplica:
         self.states_filename = f"{self.path}/.gc/{hostname}.{context}.json"
 
 
-    def pull(self):
+    def pull(self, deleting=False):
         self.logger.debug("Pulling")
         # print(f"running for {self.path} <= {self.source}")
         self.logger.info(f"pulling {self.path} <= {self.source}")
@@ -35,6 +35,8 @@ class GhettoClusterReplica:
             args.append("-v")
         options = self.config.getConfig(self.context, "rsync options")
         if len(options) > 0:
+            if not deleting and "delete" in options:
+                options.remove("delete")
             args += [ f"--{option}" for option in options ]
         ignorals = self.config.get_ignorals(self.context)
         if len(ignorals) > 0:
@@ -80,9 +82,11 @@ class GhettoClusterReplica:
         stats.get_status_for_replica(self.context, self.replica, brief)
 
 
-    def run(self):
+    def run(self, deleting=False):
         self.logger.info(f"Running, {self.context}:{self.path}")
-        puller = Thread(target=self.pull)
+        if deleting:
+            self.logger.info(f"Deleting :|")
+        puller = Thread(target=self.pull, args=(deleting,))
         self.logger.debug("Starting pull thread")
         puller.start()
         timer = elapsed.ElapsedTimer()
@@ -102,7 +106,7 @@ class GhettoClusterReplica:
         
 
     def scan_only(self):
-        self.logger.info(f"Scanning {self.context}:{self.path}")
+        self.logger.info(f"Only scanning {self.context}:{self.path}")
         ignorals = self.config.get_ignorals(self.context)
         scn = scanner.Scanner(self.path, ignorals, self.states_filename)
         scn.scan()

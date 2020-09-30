@@ -104,7 +104,7 @@ class GhettoClusterNode:
                 if scan_only:
                     gcr.scan_only()
                 else:
-                    gcr.run()
+                    gcr.run(deleting=deleting)
                 gcr.get_status(brief=True)
         else:
             self.logger.info(f"I host no replicas")
@@ -115,7 +115,7 @@ class GhettoClusterNode:
             signal.signal(signal.SIGHUP, self.wakeup)
             signal.signal(signal.SIGTERM, self.go_peacefully)
             while True:
-                self.run()
+                self.run(deleting=deleting)
                 CYCLE = str_to_duration(self.config.getOption("cycle", "24h"))
                 self.logger.info(f"Sleeping for {duration_to_str(CYCLE)}" + \
                                     f" in PID {os.getpid()}")
