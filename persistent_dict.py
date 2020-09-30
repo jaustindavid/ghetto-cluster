@@ -75,7 +75,7 @@ class PersistentDict:
         ntries = 0
         # TODO: protect this ... better
         while os.path.exists(tmpfile) and ntries < 6:
-            logger.debug(f"{tmpfile} exists; waiting 5")
+            self.logger.debug(f"{tmpfile} exists; waiting 5")
             time.sleep(5)
             ntries += 1
         with open(tmpfile, "w") as statefile:
