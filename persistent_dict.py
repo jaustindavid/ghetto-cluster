@@ -10,7 +10,7 @@ pd.set()
 pd.closeTransaction()
 """
 
-import os, json, logging, time
+import os, json, logging
 from utils import logger_str
 import elapsed, config
 
@@ -50,12 +50,12 @@ class PersistentDict:
             return None
         try:
             with open(filename, "r") as statefile:
-                self.data = json.load(statefile)
+                self.data = json.load(statefile, strict=False)
                 if self.data is None:
                     self.logger.debug("json.load() -> self.data is None")
                     self.data = {}
         except json.decoder.JSONDecodeError as err:
-            self.logger.warn(err.message)
+            self.logger.warn(err)
             os.rename(filename, f"{filename}.busted")
             self.logger.warn(f"whoopsie, JSONDecodeError;" \
                         f" saved in {filename}.busted")
@@ -75,7 +75,7 @@ class PersistentDict:
         ntries = 0
         # TODO: protect this ... better
         while os.path.exists(tmpfile) and ntries < 6:
-            self.logger.debug(f"{tmpfile} exists; waiting 5")
+            logger.debug(f"{tmpfile} exists; waiting 5")
             time.sleep(5)
             ntries += 1
         with open(tmpfile, "w") as statefile:
